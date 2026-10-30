@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODE X — Editor de Código</title>
+
+<!-- ============ CodeMirror 5 (CDN) ============ -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/lua/lua.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
+
+<!-- ============ Runtimes reais ============ -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.2/dist/sql-wasm.js"></script>
+
+<style>
+:root{
+  --bg:#0D1117; --panel:#161B22; --blue:#2196F3;
+  --green:#00E676; --text:#FFFFFF; --muted:#8B949E; --border:#30363D;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);
+  height:100vh;display:flex;flex-direction:column;overflow:hidden}
+body.light{--bg:#ffffff;--panel:#f3f3f3;--text:#1f2328;--muted:#57606a;--border:#d0d7de}
+
+/* Topbar */
+.topbar{display:flex;justify-content:space-between;align-items:center;
+  height:48px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{font-weight:bold;color:var(--blue);font-size:1.05rem}
+.topbar-actions{display:flex;gap:6px}
+.topbar button{background:transparent;border:1px solid var(--border);color:var(--text);
+  padding:6px 10px;border-radius:6px;cursor:pointer;font-size:.82rem}
+.topbar button:hover{background:var(--border)}
+.btn-run{background:var(--green)!important;color:#0D1117!important;font-weight:bold}
+.btn-run:hover{filter:brightness(1.1)}
+
+/* Layout */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:240px;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-head{display:flex;justify-content:space-between;align-items:center;
+  padding:8px 10px;font-size:.7rem;font-weight:bold;color:var(--muted);
+  border-bottom:1px solid var(--border)}
+.sidebar-head button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem}
+.file-tree{flex:1;overflow-y:auto;padding:6px}
+.file-item{padding:5px 8px;font-size:.82rem;cursor:pointer;border-radius:4px;
+  display:flex;justify-content:space-between;align-items:center}
+.file-item:hover{background:var(--border)}
+.file-item.active{background:var(--blue);color:#fff}
+.file-item .acts{display:none;gap:4px}
+.file-item:hover .acts{display:flex}
+.file-item .acts button{background:none;border:none;cursor:pointer;font-size:.7rem;color:inherit}
+
+/* Workspace */
+.workspace{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);
+  overflow-x:auto;flex-shrink:0}
+.tab{padding:7px 12px;font-size:.82rem;cursor:pointer;border-right:1px solid var(--border);
+  display:flex;gap:6px;align-items:center;white-space:nowrap}
+.tab.active{background:var(--bg);border-bottom:2px solid var(--blue)}
+.tab .x{cursor:pointer;opacity:.6}
+.tab .x:hover{opacity:1}
+.editor-wrap{flex:1;overflow:hidden;position:relative}
+.CodeMirror{height:100%!important;font-size:14px;font-family:'Fira Code',monospace}
+
+/* Terminal */
+.terminal{height:220px;background:#0a0e14;border-top:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0}
+.term-head{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 10px;background:var(--panel);font-size:.72rem;color:var(--muted);
+  font-weight:bold;border-bottom:1px solid var(--border)}
+.term-head button{background:none;border:1px solid var(--border);color:var(--muted);
+  padding:2px 8px;border-radius:4px;cursor:pointer;font-size:.7rem}
+.term-head .stop{color:#ff5252;border-color:#ff5252}
+.term-out{flex:1;overflow-y:auto;padding:8px 12px;font-family:'Courier New',monospace;
+  font-size:.82rem;line-height:1.5;white-space:pre-wrap;color:#c9d1d9}
+.term-out .err{color:#ff5252}
+.term-out .ok{color:var(--green)}
+.term-in{display:flex;align-items:center;padding:5px 12px;border-top:1px solid var(--border)}
+.term-in .p{color:var(--green);margin-right:6px;font-family:monospace}
+#termInput{flex:1;background:none;border:none;color:var(--text);
+  font-family:'Courier New',monospace;font-size:.82rem;outline:none}
+
+/* Modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  justify-content:center;align-items:center;z-index:999}
+.modal.on{display:flex}
+.modal-box{background:var(--panel);padding:20px;border-radius:10px;
+  border:1px solid var(--border);min-width:280px}
+.modal-box h2{margin-bottom:14px;font-size:1.1rem}
+.modal-box label{display:block;margin-bottom:10px;font-size:.88rem}
+.modal-box input,.modal-box select{background:var(--bg);border:1px solid var(--border);
+  color:var(--text);padding:4px 6px;border-radius:4px;margin-left:6px}
+.modal-box button{width:100%;padding:8px;border:none;border-radius:6px;
+  background:var(--blue);color:#fff;cursor:pointer;margin-top:6px}
+
+/* Preview iframe */
+#preview{position:fixed;inset:0;background:#fff;z-index:500;display:none;flex-direction:column}
+#preview .bar{background:var(--panel);padding:6px 10px;display:flex;justify-content:space-between}
+#preview iframe{flex:1;border:none;width:100%}
+#preview .close-preview{background:#ff5252;border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer}
+
+@media(max-width:600px){
+  .sidebar{position:absolute;left:0;top:48px;bottom:0;z-index:200;width:0;overflow:hidden}
+  .sidebar.open{width:220px}
+  .topbar button{padding:4px 7px;font-size:.72rem}
+  .terminal{height:170px}
+}
+</style>
+</head>
+<body>
+
+<!-- Barra superior -->
+<header class="topbar">
+  <div class="logo">🚀 CODE X</div>
+  <div class="topbar-actions">
+    <button id="btnMenu" title="Menu">☰</button>
+    <button id="btnNew">📄 Novo</button>
+    <button id="btnSave">💾 Salvar</button>
+    <button id="btnRun" class="btn-run">▶ EXECUTAR</button>
+    <button id="btnTheme">🌓</button>
+    <button id="btnCfg">⚙️</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span>EXPLORADOR</span>
+      <div>
+        <button id="btnNewFile" title="Novo arquivo">📄+</button>
+        <button id="btnNewFolder" title="Nova pasta">📁+</button>
+        <button id="btnImport" title="Importar">📂</button>
+      </div>
+    </div>
+    <div class="file-tree" id="fileTree"></div>
+    <input type="file" id="fileInput" multiple style="display:none">
+  </aside>
+
+  <!-- Workspace -->
+  <main class="workspace">
+    <div class="tabs" id="tabs"></div>
+    <div class="editor-wrap" id="editorWrap"></div>
+
+    <div class="terminal">
+      <div class="term-head">
+        <span>TERMINAL</span>
+        <div>
+          <button id="btnClear">Limpar</button>
+          <button id="btnStop" class="stop">⏹ Interromper</button>
+        </div>
+      </div>
+      <div class="term-out" id="termOut"></div>
+      <div class="term-in">
+        <span class="p">$</span>
+        <input id="termInput" placeholder="help | clear | ls | run arquivo.js" autocomplete="off">
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal Config -->
+<div class="modal" id="modalCfg">
+  <div class="modal-box">
+    <h2>Configurações</h2>
+    <label>Fonte: <input type="number" id="fontSize" min="10" max="28" value="14"></label>
+    <label>Tema:
+      <select id="themeSel">
+        <option value="dark">Escuro</option>
+        <option value="light">Claro</option>
+      </select>
+    </label>
+    <button id="btnCloseCfg">Fechar</button>
+  </div>
+</div>
+
+<!-- Preview iframe -->
+<div id="preview">
+  <div class="bar">
+    <span>▶ Pré-visualização</span>
+    <button class="close-preview" onclick="document.getElementById('preview').style.display='none'">✕ Fechar</button>
+  </div>
+  <iframe id="previewFrame" sandbox="allow-scripts allow-forms allow-modals"></iframe>
+</div>
+
+<script>
+/* ============================================================
+   CODE X — núcleo da aplicação
+   ============================================================ */
+
+/* ---------- 1. Sistema de arquivos (IndexedDB) ---------- */
+const DB_NAME='codex-db', STORE='files';
+let db=null;
+
+function openDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains(STORE))
+        d.createObjectStore(STORE,{keyPath:'path'});
+    };
+    r.onsuccess=e=>{db=e.target.result;res()};
+    r.onerror=e=>rej(e.target.error);
+  });
+}
+function fsPut(path,content,lang){
+  return new Promise((res,rej)=>{
+    const t=db.transaction(STORE,'readwrite');
+    t.objectStore(STORE).put({path,content,lang:lang||'',updated:Date.now()});
+    t.oncomplete=res; t.onerror=e=>rej(e.target.error);
+  });
+}
+function fsGet(path){
+  return new Promise((res,rej)=>{
+    const t=db.transaction(STORE,'readonly');
+    const q=t.objectStore(STORE).get(path);
+    q.onsuccess=()=>res(q.result); q.onerror=e=>rej(e.target.error);
+  });
+}
+function fsAll(){
+  return new Promise((res,rej)=>{
+    const t=db.transaction(STORE,'readonly');
+    const q=t.objectStore(STORE).getAll();
+    q.onsuccess=()=>res(q.result||[]); q.onerror=e=>rej(e.target.error);
+  });
+}
+function fsDel(path){
+  return new Promise((res,rej)=>{
+    const t=db.transaction(STORE,'readwrite');
+    t.objectStore(STORE).delete(path);
+    t.oncomplete=res; t.onerror=e=>rej(e.target.error);
+  });
+}
+
+/* ---------- 2. Estado do editor ---------- */
+let cm=null;
+const tabs=[];          // {path,lang}
+let activePath=null;
+let autosaveInterval=null;
+
+/* ---------- 3. Terminal ---------- */
+const termOut=document.getElementById('termOut');
+const termInput=document.getElementById('termInput');
+let history=[], histIdx=-1;
+
+function termWrite(txt,cls=''){
+  const d=document.createElement('div');
+  if(cls) d.className=cls;
+  d.textContent=txt;
+  termOut.appendChild(d);
+  termOut.scrollTop=termOut.scrollHeight;
+}
+
+termInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    const cmd=termInput.value.trim();
+    if(cmd){
+      history.push(cmd); histIdx=history.length;
+      termWrite('$ '+cmd);
+      termInput.value='';
+      handleCmd(cmd);
+    }
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(histIdx>0){histIdx--;termInput.value=history[histIdx];}
+  } else if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(histIdx<history.length-1){histIdx++;termInput.value=history[histIdx];}
+    else{histIdx=history.length;termInput.value='';}
+  }
+});
+
+async function handleCmd(cmd){
+  const [c,...args]=cmd.split(/\s+/);
+  switch(c){
+    case 'help':
+      termWrite('Comandos: help, clear, ls, cat <arquivo>, run <arquivo>');break;
+    case 'clear':
+      termOut.innerHTML='';break;
+    case 'ls':{
+      const files=await fsAll();
+      if(!files.length) termWrite('(nenhum arquivo)');
+      else files.forEach(f=>termWrite(f.path));
+      break;
+    }
+    case 'cat':{
+      if(!args[0]){termWrite('uso: cat <arquivo>','err');break;}
+      const f=await fsGet(args[0]);
+      termWrite(f?f.content:`arquivo "${args[0]}" não encontrado`,f?'':'err');
+      break;
+    }
+    case 'run':{
+      if(!args[0]){termWrite('uso: run <arquivo>','err');break;}
+      const f=await fsGet(args[0]);
+      if(!f){termWrite('arquivo não encontrado','err');break;}
+      execute(f.lang||langFromExt(args[0]),f.content);
+      break;
+    }
+    default:
+      termWrite(`comando "${c}" não reconhecido. Digite "help".`,'err');
+  }
+}
+
+/* ---------- 4. Editor (CodeMirror) ---------- */
+const modeMap={
+  js:'javascript',ts:'javascript',jsx:'javascript',tsx:'javascript',
+  py:'python',html:'htmlmixed',htm:'htmlmixed',css:'css',
+  json:{name:'javascript',json:true},sql:'sql',xml:'xml',
+  lua:'lua',c:'text/x-csrc',cpp:'text/x-c++src',h:'text/x-csrc',
+  java:'text/x-java',php:'php',md:'markdown',txt:''
+};
+
+function langFromExt(name){
+  const ext=(name.split('.').pop()||'').toLowerCase();
+  return ext;
+}
+function modeFor(lang){
+  return modeMap[lang]||'';
+}
+
+function initEditor(content,lang){
+  if(cm){ cm.toTextArea && cm.getWrapperElement().remove(); cm=null; }
+  const wrap=document.getElementById('editorWrap');
+  wrap.innerHTML='<textarea id="ta"></textarea>';
+  cm=CodeMirror.fromTextArea(document.getElementById('ta'),{
+    lineNumbers:true,
+    mode:modeFor(lang),
+    theme:'dracula',
+    indentUnit:2,
+    tabSize:2,
+    autoCloseBrackets:true,
+    matchBrackets:true,
+    lineWrapping:true
+  });
+  cm.setValue(content||'');
+  cm.setSize('100%','100%');
+  cm.on('change',()=>{
+    if(activePath) scheduleAutosave();
+  });
+}
+
+/* ---------- 5. Tabs ---------- */
+function renderTabs(){
+  const el=document.getElementById('tabs');
+  el.innerHTML='';
+  tabs.forEach(t=>{
+    const d=document.createElement('div');
+    d.className='tab'+(t.path===activePath?' active':'');
+    d.innerHTML=`<span>${t.path}</span><span class="x">✕</span>`;
+    d.onclick=e=>{
+      if(e.target.classList.contains('x')){ closeTab(t.path); return; }
+      openFile(t.path);
+    };
+    el.appendChild(d);
+  });
+}
+
+async function closeTab(path){
+  const i=tabs.findIndex(t=>t.path===path);
+  if(i<0) return;
+  tabs.splice(i,1);
+  if(activePath===path){
+    activePath=tabs.length?tabs[Math.max(0,i-1)].path:null;
+    if(activePath) await openFile(activePath);
+    else { initEditor('',''); document.getElementById('editorWrap').innerHTML=''; cm=null; }
+  }
+  renderTabs();
+}
+
+async function openFile(path){
+  const f=await fsGet(path);
+  if(!f){ alert('arquivo não encontrado'); return; }
+  const existing=tabs.find(t=>t.path===path);
+  if(!existing) tabs.push({path,lang:f.lang||langFromExt(path)});
+  activePath=path;
+  renderTabs();
+  initEditor(f.content,f.lang||langFromExt(path));
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+/* ---------- 6. Árvore de arquivos ---------- */
+async function renderTree(){
+  const files=await fsAll();
+  const tree=document.getElementById('fileTree');
+  tree.innerHTML='';
+  if(!files.length){
+    tree.innerHTML='<div style="padding:10px;color:var(--muted);font-size:.8rem">Nenhum arquivo. Clique em 📄+</div>';
+    return;
+  }
+  files.sort((a,b)=>a.path.localeCompare(b.path));
+  files.forEach(f=>{
+    const d=document.createElement('div');
+    d.className='file-item'+(f.path===activePath?' active':'');
+    d.innerHTML=`<span>${f.path.split('/').pop()}</span>
+      <span class="acts">
+        <button title="Renomear">✏️</button>
+        <button title="Exportar">⬇️</button>
+        <button title="Excluir">🗑️</button>
+      </span>`;
+    d.onclick=async e=>{
+      if(e.target.title==='Renomear'){
+        const nn=prompt('Novo nome:',f.path);
+        if(nn&&nn!==f.path){
+          await fsPut(nn,f.content,f.lang); await fsDel(f.path);
+          const t=tabs.find(t=>t.path===f.path); if(t) t.path=nn;
+          if(activePath===f.path) activePath=nn;
+          await renderTree(); renderTabs();
+        }
+        return;
+      }
+      if(e.target.title==='Excluir'){
+        if(confirm(`Excluir "${f.path}"?`)){
+          await fsDel(f.path);
+          await closeTab(f.path);
+          await renderTree();
+        }
+        return;
+      }
+      if(e.target.title==='Exportar'){
+        const blob=new Blob([f.content],{type:'text/plain'});
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download=f.path.split('/').pop();
+        a.click();
+        return;
+      }
+      openFile(f.path);
+    };
+    tree.appendChild(d);
+  });
+}
+
+/* ---------- 7. Ações dos botões ---------- */
+async function newFile(){
+  const path=prompt('Nome do arquivo (ex.: main.js, style.css, app.py):');
+  if(!path) return;
+  if(await fsGet(path)){ alert('Já existe.'); return; }
+  const lang=langFromExt(path);
+  await fsPut(path,'',lang);
+  await renderTree();
+  await openFile(path);
+}
+
+async function newFolder(){
+  alert('Pastas: crie arquivos com "pasta/nome.ext" (ex.: src/main.js). O explorador organiza automaticamente.');
+}
+
+async function saveActive(){
+  if(!activePath){ termWrite('nenhum arquivo aberto','err'); return; }
+  const content=cm.getValue();
+  const lang=langFromExt(activePath);
+  await fsPut(activePath,content,lang);
+  termWrite(`✓ salvo: ${activePath}`,'ok');
+}
+
+function scheduleAutosave(){
+  if(!activePath) return;
+  clearTimeout(autosaveInterval);
+  autosaveInterval=setTimeout(()=>saveActive().catch(()=>{}),1200);
+}
+
+async function importFiles(files){
+  for(const file of files){
+    const content=await file.text();
+    await fsPut(file.name,content,langFromExt(file.name));
+  }
+  await renderTree();
+  termWrite('✓ importação concluída','ok');
+}
+
+/* ---------- 8. Execução real ---------- */
+let pyodide=null, sqlInit=null, activeWorker=null;
+
+async function getPy(){
+  if(!pyodide) pyodide=await loadPyodide({indexURL:"https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"});
+  return pyodide;
+}
+async function getSQL(){
+  if(!sqlInit) sqlInit=initSqlJs({locateFile:f=>`https://cdn.jsdelivr.net/npm/sql.js@1.10.2/dist/${f}`});
+  return sqlInit;
+}
+
+async function execute(lang,code){
+  termWrite(`▶ executando ${lang}...`);
+  try{
+    switch(lang){
+      case 'js': case 'ts': case 'jsx': case 'tsx': {
+        const blob=new Blob([`
+          self.onmessage=e=>{
+            const out=[];
+            const orig=console.log;
+            console.log=(...a)=>{out.push(a.join(' '));orig(...a)};
+            try{ (new Function(e.data.code))(); self.postMessage({ok:true,out:out.join('\\n')}); }
+            catch(err){ self.postMessage({ok:false,err:err.message}); }
+          };
+        `],{type:'application/javascript'});
+        const w=new Worker(URL.createObjectURL(blob));
+        activeWorker=w;
+        await new Promise(res=>{
+          w.onmessage=e=>{
+            if(e.data.ok) termWrite(e.data.out||'(sem saída)','ok');
+            else termWrite('ERRO: '+e.data.err,'err');
+            w.terminate(); activeWorker=null; res();
+          };
+          w.postMessage({code});
+        });
+        return;
+      }
+      case 'html': case 'htm': case 'css': {
+        const frame=document.getElementById('previewFrame');
+        document.getElementById('preview').style.display='flex';
+        const doc=frame.contentDocument||frame.contentWindow.document;
+        doc.open();
+        if(lang==='css') doc.write(`<style>${code}</style><body>/* CSS aplicado */</body>`);
+        else doc.write(code);
+        doc.close();
+        termWrite('✓ HTML renderizado no preview','ok');
+        return;
+      }
+      case 'py': {
+        const py=await getPy();
+        py.setStdout({batched:s=>termWrite(s)});
+        py.setStderr({batched:s=>termWrite(s,'err')});
+        await py.runPythonAsync(code);
+        termWrite('✓ python concluído','ok');
+        return;
+      }
+      case 'sql': {
+        const SQL=await getSQL();
+        const db=new SQL.Database();
+        const r=db.exec(code);
+        if(!r.length) termWrite('(nenhum resultado)');
+        else r.forEach(rs=>{
+          termWrite(rs.columns.join(' | '));
+          termWrite('-'.repeat(20));
+          rs.values.forEach(row=>termWrite(row.join(' | ')));
+        });
+        db.close();
+        termWrite('✓ sql concluído','ok');
+        return;
+      }
+      case 'json': {
+        try{ JSON.parse(code); termWrite('✓ JSON válido','ok'); }
+        catch(e){ termWrite('ERRO JSON: '+e.message,'err'); }
+        return;
+      }
+      case 'xml': {
+        const p=new DOMParser();
+        const d=p.parseFromString(code,'text/xml');
+        const errs=d.getElementsByTagName('parsererror');
+        if(errs.length) termWrite('ERRO XML: '+errs[0].textContent,'err');
+        else termWrite('✓ XML válido','ok');
+        return;
+      }
+      case 'lua': {
+        termWrite('⚠ Lua: execute em https://fengari.io ou instale o runtime Lua. Este dispositivo não tem VM Lua carregada automaticamente.','err');
+        return;
+      }
+      case 'c': case 'cpp': case 'java': case 'php': {
+        termWrite(`⚠ ${lang.toUpperCase()} requer compilador nativo. Em navegador, é necessário um serviço remoto (ex.: Judge0, Piston API).`, 'err');
+        termWrite('Sugestão: use a API pública https://emkc.org/api/v2/piston para compilar C/C++/Java/PHP.', 'info');
+        return;
+      }
+      default:
+        termWrite(`Linguagem "${lang}" sem executor.`, 'err');
+    }
+  }catch(err){
+    termWrite('ERRO FATAL: '+err.message,'err');
+  }
+}
+
+/* ---------- 9. Ligar botões ---------- */
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await openDB();
+  await renderTree();
+
+  document.getElementById('btnRun').onclick=async ()=>{
+    if(!activePath){ termWrite('nenhum arquivo aberto','err'); return; }
+    const lang=langFromExt(activePath);
+    await execute(lang,cm.getValue());
+  };
+  document.getElementById('btnSave').onclick=()=>saveActive();
+  document.getElementById('btnNew').onclick=()=>newFile();
+  document.getElementById('btnNewFile').onclick=()=>newFile();
+  document.getElementById('btnNewFolder').onclick=()=>newFolder();
+  document.getElementById('btnImport').onclick=()=>document.getElementById('fileInput').click();
+  document.getElementById('fileInput').onchange=e=>importFiles([...e.target.files]);
+  document.getElementById('btnTheme').onclick=()=>{
+    document.body.classList.toggle('light');
+    if(cm) cm.setOption('theme', document.body.classList.contains('light')?'default':'dracula');
+  };
+  document.getElementById('btnCfg').onclick=()=>document.getElementById('modalCfg').classList.add('on');
+  document.getElementById('btnCloseCfg').onclick=()=>document.getElementById('modalCfg').classList.remove('on');
+  document.getElementById('fontSize').onchange=e=>{
+    if(cm) cm.getWrapperElement().style.fontSize=e.target.value+'px';
+    cm && cm.refresh();
+  };
+  document.getElementById('themeSel').onchange=e=>{
+    const light=e.target.value==='light';
+    document.body.classList.toggle('light',light);
+    if(cm) cm.setOption('theme',light?'default':'dracula');
+  };
+  document.getElementById('btnClear').onclick=()=>termOut.innerHTML='';
+  document.getElementById('btnStop').onclick=()=>{
+    if(activeWorker){ activeWorker.terminate(); activeWorker=null; termWrite('⏹ interrompido','err'); }
+    else termWrite('nada em execução','');
+  };
+  document.getElementById('btnMenu').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+
+  /* Atalhos */
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveActive();}
+    if((e.ctrlKey||e.metaKey)&&e.key==='n'){e.preventDefault();newFile();}
+    if(e.key==='F5'){e.preventDefault();document.getElementById('btnRun').click();}
+  });
+
+  /* Cria arquivo inicial se não houver nenhum */
+  const all=await fsAll();
+  if(!all.length){
+    await fsPut('index.html',
+`<!DOCTYPE html>
+<html>
+<head><title>Olá</title></head>
+<body>
+  <h1>Olá, CODE X!</h1>
+</body>
+</html>`,'html');
+    await fsPut('script.js','console.log("Olá do JavaScript!");','js');
+    await renderTree();
+  }
+
+  /* Abre o primeiro arquivo */
+  const files=await fsAll();
+  if(files.length) openFile(files[0].path);
+
+  termWrite('CODE X pronto. Digite "help" para comandos.','ok');
+});
+</script>
+</body>
+</html>
